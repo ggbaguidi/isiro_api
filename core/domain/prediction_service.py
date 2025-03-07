@@ -1,6 +1,6 @@
+import os
 from typing import Dict, Any
 import pandas as pd
-from datetime import datetime
 from core.ports.model_port import ModelPort
 from core.ports.notification_port import NotificationPort
 from infrastructure.config import Config
@@ -12,7 +12,7 @@ class PredictionService:
         self.notifier = notifier
         self.alert_threshold = float(Config.ALERT_THRESHOLD)
         self._dataset = self._load_dataset()  # Load dataset once during initialization
-        self.arduino_data = None  # Store latest Arduino data
+        self.arduino_data = self._load_arduino_data()  # Store latest Arduino data
 
     def _load_dataset(self) -> pd.DataFrame:
         """Load and cache the dataset"""
@@ -27,6 +27,31 @@ class PredictionService:
             return df
         except Exception as e:
             raise ValueError(f"Error loading flood dataset: {str(e)}") from e
+
+    def _load_arduino_data(self) -> Dict[str, Any]:
+        """Load the latest Arduino data from the CSV file"""
+        file_path = Config.ARDUINO_DATA_PATH
+
+        if not os.path.exists(file_path):
+            print("No Arduino data file found. Starting with empty data.")
+            return None
+
+        try:
+            # Read the CSV file
+            df = pd.read_csv(file_path)
+
+            # Get the last row (most recent data)
+            if not df.empty:
+                latest_data = df.iloc[-1].to_dict()
+                print(f"Loaded latest Arduino data: {latest_data}")
+                return latest_data
+            else:
+                print("Arduino data file is empty.")
+                return None
+
+        except Exception as e:
+            print(f"Error loading Arduino data: {str(e)}")
+            return None
 
     async def predict_and_alert(self) -> float:
         """Predict and alert with combined data (async)"""
@@ -48,19 +73,25 @@ class PredictionService:
             raise PredictionError(f"Prediction and alert failed: {str(e)}") from e
 
     def _get_combined_data(self) -> Dict[str, Any]:
-        """Combine Arduino data with random sample from dataset"""
+        """Combine Arduino data with the last row of the dataset"""
         if self._dataset.empty:
             raise ValueError("Dataset is empty")
 
         # Get random sample from dataset
-        sample = self._dataset.sample(n=1).iloc[0].to_dict()
-        sample.pop('FloodProbability', None)  # Remove target variable
+        last_row = self._dataset.sample(n=1).iloc[0].to_dict()
+        last_row.pop('FloodProbability', None)  # Remove target variable
 
-        # Merge with latest Arduino data
+        # Merge with latest Arduino data (if available)
         if self.arduino_data:
-            sample.update(self.arduino_data)
+            # Add Arduino data as new features
+            last_row.update({
+                'temperature': self.arduino_data.get('temperature', 0),
+                'humidity': self.arduino_data.get('humidity', 0),
+                'soil_moisture': self.arduino_data.get('soil_moisture', 0),
+                'water_level': self.arduino_data.get('water_level', 0)
+            })
 
-        return sample
+        return last_row
 
     def _save_arduino_data(self, data: dict):
         """Save Arduino data and update latest values"""

@@ -38,7 +38,11 @@ class FloodModelAdapter(ModelPort):
             input_data['PopulationScore'],
             input_data['WetlandLoss'],
             input_data['InadequatePlanning'],
-            input_data['PoliticalFactors']
+            input_data['PoliticalFactors'],
+            input_data['temperature'],  # From Arduino
+            input_data['humidity'],     # From Arduino
+            input_data['soil_moisture'], # From Arduino
+            input_data['water_level']    # From Arduino
         ]
 
         features = pd.DataFrame(
@@ -63,6 +67,11 @@ class FloodModelAdapter(ModelPort):
                 'PopulationScore',
                 'WetlandLoss',
                 'InadequatePlanning',
-                'PoliticalFactors'])
+                'PoliticalFactors',
+                'temperature',
+                'humidity',
+                'soil_moisture',
+                'water_level'
+            ])
 
         return float(self.model.predict(features)[0])

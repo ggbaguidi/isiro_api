@@ -1,2 +1,4 @@
 *env*
 .vscode*
+!.env.example
+*__pycache__*
